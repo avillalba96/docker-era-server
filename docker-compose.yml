@@ -1,0 +1,63 @@
+version: '3.5'
+services:
+  eset-db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password --lower_case_table_names=2 --bind-address=* --innodb_use_native_aio=0 --max_allowed_packet=33M --log_bin_trust_function_creators=1 --innodb_log_file_size=100M --innodb_log_files_in_group=2
+    restart: unless-stopped
+    container_name: eset-db
+    env_file: .env
+    environment:
+      - MYSQL_ROOT_USER=$DB_ADMIN_USERNAME
+      - MYSQL_ROOT_PASSWORD=$DB_ADMIN_PASSWORD
+    volumes:
+      - "${ROOT}/mysql/data:/var/lib/mysql"
+      - "${ROOT}/mysql/conf:/etc/mysql/conf.d"
+    logging:
+      driver: journald
+    cap_add:
+      - SYS_NICE
+
+  eset-srv:
+    image: era-server:latest
+    build:
+      context: docker-eset-era-server/
+    restart: unless-stopped
+    container_name: eset-srv
+    env_file: .env
+    environment:
+      - DB_HOSTNAME=eset-db
+      - DISPLAY=:1
+    depends_on:
+      - eset-db
+    ports:
+      - 2222:2222
+    volumes:
+      - "${ROOT}/etc:/etc/opt/eset/"
+      - "${ROOT}/var:/var/opt/eset/"
+      - "${ROOT}/log:/var/log/eset/"
+    logging:
+      driver: journald
+
+  eset-console:
+    image: era-console:latest
+    build:
+      context: docker-eset-era-console/
+    restart: unless-stopped
+    container_name: eset-console
+    env_file: .env
+    environment:
+      - ERA_SRV_HOSTNAME=eset-srv
+    depends_on:
+      - eset-srv
+    ports:
+      - 8080:8080
+    networks:
+      #- nginx-proxy
+      - default
+    logging:
+      driver: journald
+
+#networks:
+  #nginx-proxy:
+    #external:
+      #name: nginx-proxy
